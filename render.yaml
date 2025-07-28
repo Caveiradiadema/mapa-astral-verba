@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: mapa-astral-verba
+    env: python
+    plan: free
+    buildCommand: ""
+    startCommand: python app.py
+    pythonVersion: 3.10.13
