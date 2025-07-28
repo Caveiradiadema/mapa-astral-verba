@@ -3,6 +3,6 @@ services:
     name: mapa-astral-verba
     env: python
     plan: free
-    buildCommand: ""
+    buildCommand: pip install -r requirements.txt
     startCommand: python app.py
     pythonVersion: 3.10.13
