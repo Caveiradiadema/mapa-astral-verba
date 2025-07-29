@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file, render_template, send_from_directory
+from flask import Flask, request, send_file, render_template, send_from_directory, make_response
 from astrologia import gerar_mapa
 from pdf import criar_pdf
 import os
@@ -10,16 +10,8 @@ app = Flask(__name__, template_folder='.')
 def home():
     return render_template("formulario.html")
 
-# Rota para servir a logo diretamente a partir do diretório do projeto.
 @app.route('/logo.png')
 def serve_logo():
-    """Serve o arquivo logo.png localizado no mesmo diretório deste script.
-
-    O formulário HTML referencia /logo.png para a imagem de logomarca. Sem esta
-    rota, o servidor Flask retornaria 404, pois não há pasta static. Ao
-    adicionar esta rota, garantimos que a imagem seja servida corretamente
-    independentemente da localização do diretório de trabalho.
-    """
     return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'logo.png')
 
 @app.route("/api/mapa", methods=["POST"])
@@ -38,22 +30,29 @@ def gerar():
             hora = f"{hora[:2]}:{hora[2:]}"
 
         print(f"[DEBUG app.py] Dados recebidos: Nome={nome}, Data={data}, Hora={hora}, Cidade={cidade}, Estado={estado}")
-        print("[DEBUG app.py] Chamando astrologia.gerar_mapa()...")
-        
         mapa = gerar_mapa(data, hora, cidade, estado)
-        
+
         if not mapa:
             print("[ERRO app.py] gerar_mapa() retornou None.")
-            return "Erro ao gerar os dados do mapa. Verifique o console do servidor.", 400
+            return "Erro ao gerar os dados do mapa.", 400
 
-        print(f"[DEBUG app.py] Mapa recebido de gerar_mapa(): {mapa}")
-        print("[DEBUG app.py] Chamando pdf.criar_pdf()...")
-        
         output_path = f"mapa_{nome.replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
         criar_pdf(nome, mapa, output_path)
-        
-        print(f"[DEBUG app.py] PDF criado em: {output_path}. Enviando arquivo...")
-        return send_file(output_path, as_attachment=True)
+
+        print(f"[DEBUG app.py] PDF criado: {output_path}")
+
+        with open(output_path, 'rb') as f:
+            pdf_data = f.read()
+
+        os.remove(output_path)  # Remove após enviar
+
+        response = make_response(pdf_data)
+        response.headers.set('Content-Type', 'application/pdf')
+        response.headers.set('Content-Disposition', f'attachment; filename="{output_path}"')
+        # Script para redirecionar após download
+        response.headers.set('Refresh', '1; url=https://caveiradiadema.github.io/verba-site')
+
+        return response
 
     except Exception as e:
         print(f"[ERRO CRÍTICO em app.py] {repr(e)}")
