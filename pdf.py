@@ -193,3 +193,4 @@ class MapaPDFGenerator:
 def criar_pdf(nome, mapa, output_path):
     gerador = MapaPDFGenerator(nome, mapa, output_path)
     gerador.gerar_pdf()
+# FORÇANDO A ATUALIZAÇÃO PARA O GIT
