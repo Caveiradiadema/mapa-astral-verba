@@ -1,63 +1,59 @@
-from flask import Flask, request, send_file, render_template, send_from_directory, make_response
-from astrologia import gerar_mapa
-from pdf import criar_pdf
+from flask import Flask, request, send_file, jsonify
+import astrologia
+import pdf
 import os
 from datetime import datetime
 
-app = Flask(__name__, template_folder='.')
+app = Flask(__name__, static_folder='.', static_url_path='')
 
-@app.route("/", methods=["GET"])
-def home():
-    return render_template("formulario.html")
+@app.route('/')
+def index():
+    return app.send_static_file('formulario.html')
 
-@app.route('/logo.png')
-def serve_logo():
-    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), 'logo.png')
-
-@app.route("/api/mapa", methods=["POST"])
-def gerar():
+@app.route('/api/mapa', methods=['POST'])
+def gerar_e_enviar_mapa():
     try:
-        print("\n[DEBUG app.py] >>> Requisição recebida em /api/mapa.")
-        nome = request.form.get('nome')
-        data = request.form.get('data_nasc')
-        hora = request.form.get('hora_nasc')
-        cidade = request.form.get('cidade')
-        estado = request.form.get('estado')
+        # ===== CORREÇÃO APLICADA AQUI =====
+        # Em vez de request.form, usamos request.get_json() para ler dados JSON
+        dados = request.get_json()
+        if not dados:
+            return jsonify({"erro": "Nenhum dado JSON recebido."}), 400
 
-        if data and len(data) == 8 and "/" not in data:
-            data = f"{data[:2]}/{data[2:4]}/{data[4:]}"
-        if hora and len(hora) == 4 and ":" not in hora:
-            hora = f"{hora[:2]}:{hora[2:]}"
+        # Acessa os dados do dicionário 'dados'
+        nome = dados['nome']
+        data_nasc = dados['data']
+        hora_nasc = dados['hora']
+        cidade = dados['cidade']
+        estado = dados['estado']
 
-        print(f"[DEBUG app.py] Dados recebidos: Nome={nome}, Data={data}, Hora={hora}, Cidade={cidade}, Estado={estado}")
-        mapa = gerar_mapa(data, hora, cidade, estado)
+        print(f"[DEBUG app.py] >>> Requisição recebida em /api/mapa.")
+        print(f"[DEBUG app.py] Dados recebidos: Nome={nome}, Data={data_nasc}, Hora={hora_nasc}, Cidade={cidade}, Estado={estado}")
 
-        if not mapa:
-            print("[ERRO app.py] gerar_mapa() retornou None.")
-            return "Erro ao gerar os dados do mapa.", 400
+        # 2. Geração do mapa astral
+        print("[DEBUG app.py] Chamando astrologia.gerar_mapa()...")
+        mapa_data = astrologia.gerar_mapa(data_nasc, hora_nasc, cidade, estado)
 
-        output_path = f"mapa_{nome.replace(' ', '_').lower()}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
-        criar_pdf(nome, mapa, output_path)
+        if mapa_data:
+            # 3. Geração do PDF
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            output_filename = f"mapa_{nome.lower().replace(' ', '_')}_{timestamp}.pdf"
+            
+            print(f"[DEBUG app.py] Chamando pdf.criar_pdf()...")
+            pdf.criar_pdf(nome, mapa_data, output_filename)
+            
+            print(f"[DEBUG app.py] PDF criado em: {output_filename}. Enviando arquivo...")
+            return send_file(output_filename, as_attachment=True)
+        else:
+            print("[ERRO app.py] astrologia.gerar_mapa() retornou None.")
+            return jsonify({"erro": "Não foi possível gerar os dados do mapa astral."}), 500
 
-        print(f"[DEBUG app.py] PDF criado: {output_path}")
-
-        with open(output_path, 'rb') as f:
-            pdf_data = f.read()
-
-        os.remove(output_path)  # Remove após enviar
-
-        response = make_response(pdf_data)
-        response.headers.set('Content-Type', 'application/pdf')
-        response.headers.set('Content-Disposition', f'attachment; filename="{output_path}"')
-        # Script para redirecionar após download
-        response.headers.set('Refresh', '1; url=https://caveiradiadema.github.io/verba-site')
-
-        return response
-
+    except KeyError as e:
+        # Este erro acontece se uma chave (ex: 'nome') estiver faltando no JSON
+        return jsonify({"erro": f"Campo obrigatório ausente no JSON: {e.args[0]}"}), 400
     except Exception as e:
-        print(f"[ERRO CRÍTICO em app.py] {repr(e)}")
-        return f"Erro crítico no servidor: {str(e)}", 500
+        print(f"[ERRO FATAL app.py] Ocorreu uma exceção não tratada: {repr(e)}")
+        return jsonify({"erro": "Ocorreu um erro inesperado no servidor."}), 500
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
