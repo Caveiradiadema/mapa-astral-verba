@@ -1,9 +1,10 @@
 from reportlab.lib.pagesizes import A4
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+from reportlab.lib.enums import TA_JUSTIFY
 from reportlab.lib import colors
 from reportlab.lib.units import cm
+from PIL import Image as PILImage
 import os
 
 # Cores e estilos
@@ -155,6 +156,13 @@ def criar_pdf(nome, mapa, output_path):
         if os.path.exists(img_path):
             story.append(PageBreak())
             story.append(Paragraph("Quadro do seu signo solar", styles['Title']))
-            story.append(Image(img_path, width=12*cm, preserveAspectRatio=True, hAlign='CENTER'))
+
+            # Calcula altura proporcional com base em largura
+            with PILImage.open(img_path) as pil_img:
+                aspect_ratio = pil_img.height / pil_img.width
+                largura = 12 * cm
+                altura = largura * aspect_ratio
+
+            story.append(Image(img_path, width=largura, height=altura, hAlign='CENTER'))
 
     doc.build(story)
