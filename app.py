@@ -1,59 +1,86 @@
-from flask import Flask, request, send_file, jsonify
-import astrologia
-import pdf
+# app.py  –  servidor Flask principal (VERSÃO FINAL CORRIGIDA)
+# =============================================================
 import os
-from datetime import datetime
-import traceback # Importa a biblioteca de traceback
+import traceback
+from flask import (Flask, request, jsonify, render_template,
+                   send_from_directory)
+from flask_cors import CORS
 
-app = Flask(__name__, static_folder='.', static_url_path='')
+from astrologia import gerar_mapa_astral  # sua função de cálculo
+from pdf import criar_pdf  # gera o PDF final
 
-@app.route('/')
+# ─────────────  Configuração básica  ──────────────
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PDF_DIR = os.path.join(BASE_DIR, "pdfs")
+
+# --- CORREÇÃO APLICADA AQUI ---
+# Definimos o caminho para a pasta 'templates'
+TEMPL_DIR = os.path.join(BASE_DIR, "templates")
+
+# O Flask precisa do caminho absoluto para `send_from_directory`
+PDF_DIR_ABSOLUTE = os.path.abspath(PDF_DIR)
+
+# --- E A CORREÇÃO É USADA AQUI ---
+# Na inicialização do Flask, apontamos para a pasta de templates correta.
+app = Flask(__name__, template_folder=TEMPL_DIR, static_folder="static")
+CORS(app)  # permite chamadas JS locais sem CORS errors
+
+
+# ─────────────  Rotas  ──────────────
+@app.route("/", methods=["GET"])
 def index():
-    return app.send_static_file('formulario.html')
+    # Agora o Flask encontrará o 'formulario.html' dentro da pasta 'templates'
+    return render_template("formulario.html")
 
-@app.route('/api/mapa', methods=['POST'])
-def gerar_e_enviar_mapa():
+
+@app.route("/api/mapa", methods=["POST"])
+def api_mapa():
+    """
+    Endpoint que recebe dados JSON, GERA o PDF e DEVOLVE O ARQUIVO PDF
+    diretamente na resposta.
+    """
     try:
-        dados = request.get_json()
-        if not dados:
-            return jsonify({"erro": "Nenhum dado JSON recebido."}), 400
+        data = request.get_json(force=True, silent=False)
+        print("[DEBUG] Requisição recebida:", data)
 
-        nome = dados['nome']
-        data_nasc = dados['data']
-        hora_nasc = dados['hora']
-        cidade = dados['cidade']
-        estado = dados['estado']
+        campos = ["nome", "data", "hora", "cidade", "estado"]
+        if not all(k in data and data[k].strip() for k in campos):
+            return jsonify({
+                "sucesso": False,
+                "erro": "Campos obrigatórios ausentes"
+            }), 400
 
-        print(f"[DEBUG app.py] >>> Requisição recebida em /api/mapa.")
-        print(f"[DEBUG app.py] Dados recebidos: Nome={nome}, Data={data_nasc}, Hora={hora_nasc}, Cidade={cidade}, Estado={estado}")
+        mapa = gerar_mapa_astral(data["nome"].strip(), data["data"].strip(),
+                                 data["hora"].strip(), data["cidade"].strip(),
+                                 data["estado"].strip())
+        if mapa is None:
+            return jsonify({
+                "sucesso": False,
+                "erro": "Falha ao gerar dados do mapa"
+            }), 500
 
-        mapa_data = astrologia.gerar_mapa(data_nasc, hora_nasc, cidade, estado)
+        pdf_relpath = criar_pdf(mapa)
+        pdf_filename = os.path.basename(pdf_relpath)
 
-        if mapa_data:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            output_filename = f"mapa_{nome.lower().replace(' ', '_')}_{timestamp}.pdf"
-            
-            pdf.criar_pdf(nome, mapa_data, output_filename)
-            
-            print(f"[DEBUG app.py] PDF criado em: {output_filename}. Enviando arquivo...")
-            return send_file(output_filename, as_attachment=True)
-        else:
-            print("[ERRO app.py] astrologia.gerar_mapa() retornou None. Verifique os logs de astrologia.py para mais detalhes.")
-            return jsonify({"erro": "Não foi possível gerar os dados do mapa astral. Causa provável: localização não encontrada ou dados inválidos."}), 500
+        return send_from_directory(PDF_DIR_ABSOLUTE,
+                                   pdf_filename,
+                                   as_attachment=True)
 
-    except KeyError as e:
-        print(f"[ERRO app.py] Campo obrigatório ausente no JSON: {e.args[0]}")
-        return jsonify({"erro": f"Campo obrigatório ausente no JSON: {e.args[0]}"}), 400
-    except Exception as e:
-        # ===== CÓDIGO APRIMORADO AQUI =====
-        # Imprime o erro completo e o traceback para o log
-        full_traceback = traceback.format_exc()
-        print(f"[ERRO FATAL app.py] Ocorreu uma exceção não tratada: {repr(e)}")
-        print("--- INÍCIO DO TRACEBACK ---")
-        print(full_traceback)
-        print("--- FIM DO TRACEBACK ---")
-        return jsonify({"erro": "Ocorreu um erro inesperado no servidor."}), 500
+    except Exception as exc:
+        print("[ERRO /api/mapa]", exc)
+        traceback.print_exc()
+        return jsonify({
+            "sucesso": False,
+            "erro": "Erro interno do servidor"
+        }), 500
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+
+@app.route("/pdfs/<path:filename>")
+def baixar_pdf(filename):
+    """Serve arquivos PDF gerados em /pdfs."""
+    return send_from_directory(PDF_DIR_ABSOLUTE, filename)
+
+
+# ─────────────  Execução direta  ──────────────
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)), debug=True)

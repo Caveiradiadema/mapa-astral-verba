@@ -1,188 +1,132 @@
-"""
-Este módulo fornece utilitários para gerar um mapa astral completo usando a
-biblioteca flatlib. Foi ajustado para:
-
-  • Definir corretamente o caminho das efemérides do Swiss Ephemeris, usando
-    uma abordagem robusta que considera o diretório deste próprio arquivo.
-  • Configurar as variáveis de ambiente `SE_EPHE_PATH` e `FLATLIB_EPHE_PATH`
-    antes de importar quaisquer componentes do flatlib.
-  • Calcular a casa astrológica de cada corpo celeste de forma confiável
-    acessando a propriedade 'house' do objeto do planeta, calculada pela
-    própria flatlib, eliminando a necessidade de cálculos manuais complexos.
-  • Tratar o Ascendente separadamente, pois é um ângulo fundamental.
-  • Extrair aspectos astrológicos principais para todos os corpos relevantes,
-    garantindo que os tipos de dados sejam tratados corretamente para evitar erros.
-
-Os dados retornados incluem uma lista de planetas com seus signos, graus,
-minutos e casa, uma lista de aspectos, além de contagens de elementos e
-modalidades para compor um balanço energético do mapa.
-"""
-
-import os
-import datetime
-import pytz
+# astrologia.py – cálculo do mapa astral (versão final corrigida)
+# =============================================================
+import os, pytz, traceback
+from datetime import datetime
 from geopy.geocoders import Nominatim
+import swisseph as swe
 
-# ---------------------------------------------------------------------------
-# Configuração robusta do caminho das efemérides (Swiss Ephemeris)
-# ---------------------------------------------------------------------------
-# O caminho é calculado a partir do diretório onde este arquivo reside,
-# garantindo que funcione de forma consistente em qualquer ambiente.
-try:
-    module_dir = os.path.dirname(os.path.abspath(__file__))
-    EPHE_PATH = os.path.join(module_dir, 'sweph', 'ephe')
+# ─── 1. EPHEMERIS ───────────────────────────────────────────────
+BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
+EPHE_PATH = os.path.join(BASE_DIR, "sweph", "ephe")
+os.environ["SE_EPHE_PATH"]      = EPHE_PATH
+os.environ["FLATLIB_EPHE_PATH"] = EPHE_PATH
+swe.set_ephe_path(EPHE_PATH)
+print(f"[INFO] EPHE_PATH configurado: {EPHE_PATH}")
 
-    # Define as variáveis de ambiente ANTES de importar flatlib.
-    os.environ['SE_EPHE_PATH'] = EPHE_PATH
-    os.environ['FLATLIB_EPHE_PATH'] = EPHE_PATH
-
-    # Importa e configura o swisseph explicitamente
-    import swisseph as swe
-    swe.set_ephe_path(EPHE_PATH)
-
-    print(f"[INFO astrologia.py] Caminho das efemérides definido para: {EPHE_PATH}")
-
-except Exception as e:
-    print(f"[CRÍTICO astrologia.py] Falha ao configurar as efemérides: {e}")
-    # Se as efemérides não puderem ser configuradas, o módulo não pode funcionar.
-    swe = None
-
-# Somente agora importamos flatlib, que usará as configurações acima.
-from flatlib.chart import Chart
+# ─── 2. FLATLIB E CONFIGURAÇÕES ────────────────────────────────
+from flatlib.chart    import Chart
 from flatlib.datetime import Datetime
-from flatlib.geopos import GeoPos
-from flatlib import const, aspects
+from flatlib.geopos   import GeoPos
+from flatlib          import const, aspects
 
-# ---------------------------------------------------------------------------
-# Constantes e Listas
-# ---------------------------------------------------------------------------
-# Lista de corpos astrológicos a serem considerados no mapa.
-OBJETOS = [
+# Corpos celestes que a biblioteca precisa calcular (sem o Ascendente)
+CORPOS_PARA_CALCULO = [
     const.SUN, const.MOON, const.MERCURY, const.VENUS, const.MARS,
     const.JUPITER, const.SATURN, const.URANUS, const.NEPTUNE, const.PLUTO,
-    const.NORTH_NODE, const.SOUTH_NODE, const.CHIRON
+    const.NORTH_NODE, const.CHIRON
 ]
 
-# Aspectos principais a serem considerados na análise.
-ASPECTOS_RELEVANTES = ['CON', 'OPP', 'TRI', 'SEX', 'SQR']
+# Pontos que usaremos para análise de aspectos (incluindo o Ascendente)
+PONTOS_PARA_ASPECTOS = CORPOS_PARA_CALCULO + [const.ASC]
 
-# --- Funções Utilitárias ---
+# ângulos numéricos para buscar aspectos
+ANGULOS = [0, 60, 90, 120, 180]
 
-def formatar_data(data):
-    """Garante que a data esteja no formato DD/MM/YYYY."""
-    if "/" in data: return data
-    return f"{data[:2]}/{data[2:4]}/{data[4:]}"
+# --- DICIONÁRIOS DE TRADUÇÃO ---
+ID_PARA_PT = {
+    const.SUN: "Sol", const.MOON: "Lua", const.MERCURY: "Mercúrio",
+    const.VENUS: "Vênus", const.MARS: "Marte", const.JUPITER: "Júpiter",
+    const.SATURN: "Saturno", const.URANUS: "Urano", const.NEPTUNE: "Netuno",
+    const.PLUTO: "Plutão", const.NORTH_NODE: "Nodo Norte", const.CHIRON: "Quíron",
+    const.ASC: "Ascendente"
+}
 
-def formatar_hora(hora):
-    """Garante que a hora esteja no formato HH:MM."""
-    if ":" in hora: return hora
-    return f"{hora[:2]}/{hora[2:]}"
+# Dicionário para traduzir o nome do aspecto (em inglês, minúsculo) para português
+TIPO_ASPECTO_PT = {
+    "conjunction": "Conjunção", "sextile": "Sextil", "square": "Quadratura",
+    "trine": "Trígono", "opposition": "Oposição"
+}
 
-# --- Função Principal ---
+# Dicionário reverso para converter ângulo em nome
+ANGULO_PARA_NOME_EN = {
+    0: "conjunction", 60: "sextile", 90: "square",
+    120: "trine", 180: "opposition"
+}
 
-def gerar_mapa(data_nasc, hora_nasc, cidade, estado):
-    """
-    Gera o mapa astral completo a partir dos dados de nascimento.
-    """
+SIGNO_PT = {
+    'Aries':'Áries','Taurus':'Touro','Gemini':'Gêmeos','Cancer':'Câncer',
+    'Leo':'Leão','Virgo':'Virgem','Libra':'Libra','Scorpio':'Escorpião',
+    'Sagittarius':'Sagitário','Capricorn':'Capricórnio','Aquarius':'Aquário',
+    'Pisces':'Peixes'
+}
+
+# helpers de formatação
+fmt_data = lambda d: d if "/" in d else f"{d[:2]}/{d[2:4]}/{d[4:]}"
+fmt_hora = lambda h: h if ":" in h else f"{h[:2]}:{h[2:]}"
+_casa    = lambda b: b.house.id if hasattr(b, 'house') and b.house is not None else 0
+
+# ─── 3. FUNÇÃO PRINCIPAL ───────────────────────────────────────
+def gerar_mapa_astral(nome:str, data:str, hora:str, cidade:str, estado:str):
+    # --- CORREÇÃO APLICADA AQUI: O bloco try/except agora envolve toda a função ---
     try:
-        # 1. Preparação dos Dados de Entrada
-        print("[DEBUG astrologia] Formatando data, hora e localização...")
-        data_nasc_fmt = formatar_data(data_nasc)
-        hora_nasc_fmt = formatar_hora(hora_nasc)
+        geo = Nominatim(user_agent="verba-astrologia-v4").geocode(f"{cidade}, {estado}, Brasil")
+        if not geo: raise ValueError("Localização não encontrada.")
+        lat, lon = float(geo.latitude), float(geo.longitude)
 
-        geolocator = Nominatim(user_agent="verba_mapa_astral")
-        location = geolocator.geocode(f"{cidade}, {estado}, Brasil")
-        if not location:
-            raise ValueError("Localização não encontrada.")
-        print(f"[DEBUG astrologia] Localização encontrada: {location.latitude}, {location.longitude}")
-
-        # 2. Conversão de Data/Hora para UTC
-        print("[DEBUG astrologia] Montando datetime local e convertendo para UTC...")
-        local_tz = pytz.timezone("America/Sao_Paulo")
-        dt_local = local_tz.localize(datetime.datetime.strptime(f"{data_nasc_fmt} {hora_nasc_fmt}", "%d/%m/%Y %H:%M"))
+        dt_local = pytz.timezone("America/Sao_Paulo").localize(
+            datetime.strptime(f"{fmt_data(data)} {fmt_hora(hora)}", "%d/%m/%Y %H:%M")
+        )
         dt_utc = dt_local.astimezone(pytz.utc)
 
-        # 3. Criação do Mapa Astral com Flatlib
-        print("[DEBUG astrologia] Criando chart astral com flatlib...")
-        dt = Datetime(dt_utc.strftime("%Y/%m/%d"), dt_utc.strftime("%H:%M"))
-        pos = GeoPos(location.latitude, location.longitude)
-        chart = Chart(dt, pos, hsys=const.HOUSES_PLACIDUS, IDs=OBJETOS)
+        chart = Chart(
+            Datetime(dt_utc.strftime("%Y/%m/%d"), dt_utc.strftime("%H:%M"), "+00:00"),
+            GeoPos(lat, lon),
+            IDs=CORPOS_PARA_CALCULO,
+            hsys=const.HOUSES_PLACIDUS
+        )
 
-        # 4. Extração de Dados do Mapa
-        mapa = {
-            'planetas': {}, 'aspectos': [],
-            'elementos': {'Fogo': 0, 'Terra': 0, 'Ar': 0, 'Agua': 0},
-            'modalidades': {'Cardinal': 0, 'Fixo': 0, 'Mutavel': 0}
-        }
-
-        # --- Posições dos Planetas e Contagem de Elementos/Modalidades ---
-        for obj_id in OBJETOS:
-            planeta = chart.get(obj_id)
-            signo = planeta.sign
-
-            # Garante que a longitude seja um número para os cálculos
-            lon_float = float(planeta.lon)
-            grau = int(lon_float)
-            minuto = int((lon_float - grau) * 60)
-            
-            # ===== CORREÇÃO PRINCIPAL =====
-            # Acessa a casa diretamente do objeto calculado pela flatlib.
-            # Este método é simples, direto e confiável.
-            try:
-                casa = planeta.house.id
-            except AttributeError:
-                # Objetos como Nodos podem não ter uma casa definida pela biblioteca.
-                casa = 0
-
-            mapa['planetas'][obj_id] = {
-                'signo': signo, 'grau': grau, 'minuto': minuto, 'casa': casa
+        objetos_mapa = {}
+        for pid in PONTOS_PARA_ASPECTOS:
+            obj = chart.get(pid)
+            objetos_mapa[pid] = {
+                "id": pid, "nome_pt": ID_PARA_PT.get(pid, pid),
+                "signo_pt": SIGNO_PT.get(obj.sign, obj.sign),
+                "grau_completo": obj.lon, "grau": int(obj.lon),
+                "minuto": int((obj.lon - int(obj.lon)) * 60), "casa": _casa(obj)
             }
 
-            # Contagem de elementos e modalidades de forma eficiente
-            if planeta.id not in [const.NORTH_NODE, const.SOUTH_NODE]: # Nodos não contam para o balanço
-                signo_info = const.ZODIAC_INFO[signo]
-                if 'element' in signo_info:
-                    mapa['elementos'][signo_info['element']] += 1
-                if 'quality' in signo_info:
-                    mapa['modalidades'][signo_info['quality']] += 1
-
-        # --- Adiciona o Ascendente manualmente ---
-        asc = chart.get(const.ASC)
-        asc_lon_float = float(asc.lon)
-        mapa['planetas']['Asc'] = {
-            'signo': asc.sign,
-            'grau': int(asc_lon_float),
-            'minuto': int((asc_lon_float - int(asc_lon_float)) * 60),
-            'casa': 1  # O Ascendente é sempre a cúspide da casa 1
-        }
-        
-        # --- Cálculo de Aspectos ---
-        print("[DEBUG astrologia] Calculando aspectos entre objetos...")
-        for i in range(len(OBJETOS)):
-            for j in range(i + 1, len(OBJETOS)):
-                p1_id = OBJETOS[i]
-                p2_id = OBJETOS[j]
-                p1 = chart.get(p1_id)
-                p2 = chart.get(p2_id)
+        aspectos_exp = []
+        for i, p1_id in enumerate(PONTOS_PARA_ASPECTOS):
+            for p2_id in PONTOS_PARA_ASPECTOS[i + 1:]:
+                orbe_max = 5 if p1_id in [const.SUN, const.MOON] or p2_id in [const.SUN, const.MOON] else 3
+                aspecto = aspects.getAspect(chart.get(p1_id), chart.get(p2_id), ANGULOS)
                 
-                try:
-                    # Usa a função da flatlib para obter o aspecto entre dois planetas
-                    aspecto = aspects.getAspect(p1, p2, ASPECTOS_RELEVANTES)
-                    if aspecto:
-                        mapa['aspectos'].append({
-                            'planeta1': p1_id,
-                            'planeta2': p2_id,
-                            'aspecto': aspecto.type,
-                            'orb': round(aspecto.orb, 2)
-                        })
-                except Exception as e:
-                    # Este log ajuda a identificar problemas específicos de aspecto, se houver
-                    print(f"[ERRO ASPECTO] Falha ao calcular aspecto entre {p1_id} e {p2_id}: {e}")
+                if aspecto and abs(aspecto.orb) <= orbe_max:
+                    tipo_en_lower = ""
+                    if isinstance(aspecto.type, str):
+                        tipo_en_lower = aspecto.type.lower()
+                    elif isinstance(aspecto.type, int):
+                        tipo_en_lower = ANGULO_PARA_NOME_EN.get(aspecto.type, "")
 
-        print("[DEBUG astrologia] Mapa astral final gerado com sucesso.")
-        return mapa
+                    if not tipo_en_lower: continue
+
+                    aspectos_exp.append({
+                        "p1_id": p1_id, "p2_id": p2_id,
+                        "p1_nome": ID_PARA_PT.get(p1_id, p1_id),
+                        "p2_nome": ID_PARA_PT.get(p2_id, p2_id),
+                        "tipo_en": tipo_en_lower,
+                        "tipo_pt": TIPO_ASPECTO_PT.get(tipo_en_lower, tipo_en_lower.capitalize()),
+                        "orbe": round(aspecto.orb, 2)
+                    })
+        
+        return {
+            "nome": nome, "data": fmt_data(data), "hora": fmt_hora(hora),
+            "cidade": cidade, "estado": estado,
+            "objetos": objetos_mapa,
+            "aspectos": aspectos_exp
+        }
 
     except Exception as e:
-        print(f"[ERRO GERAL ao gerar mapa] {repr(e)}")
-        # Em caso de qualquer erro, retorna None para ser tratado pelo chamador.
+        print(f"[ERRO FATAL em gerar_mapa_astral] {e}")
+        traceback.print_exc()
         return None

@@ -1,196 +1,149 @@
-from reportlab.platypus import BaseDocTemplate, PageTemplate, Frame, Paragraph, Spacer, Image, PageBreak, Table, TableStyle, NextPageTemplate
+# pdf.py – gerador de PDF com foco em design e clareza para leigos
+# =======================================================================
+import os
+import time
+import unicodedata
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 from reportlab.lib import colors
 from reportlab.lib.units import cm
-import os
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, PageBreak, Frame, PageTemplate, Image
+)
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from flatlib import const
 
-# --- Constantes e Dicionários ---
+# Importe os textos que você irá escrever
+from textos_astrologicos import (
+    INTRO_METAFORA, COMO_LER, TEXTO_SOL, TEXTO_LUA, TEXTO_ASC,
+    TEXTOS_ASPECTOS
+)
+
+# --- CONFIGURAÇÃO DE DESIGN ---
 COR_FUNDO = colors.HexColor("#0D1B2A")
-COR_TEXTO = colors.HexColor("#F0EAD6")
-COR_DOURADO = colors.HexColor("#CBB26A")
-COR_AZUL = colors.HexColor("#89CFF0")
-COR_RUBI = colors.HexColor("#C44536")
-COR_LINHA = colors.HexColor("#13294B")
+COR_TITULO_OURO = colors.HexColor("#D4AF37")
+COR_SUBTITULO_AZUL = colors.HexColor("#89CFF0")
+COR_TEXTO_BRANCO = colors.HexColor("#E2E8F0")
+COR_LEGENDA_CINZA = colors.HexColor("#A0AEC0")
 
-PLANETA_PT = {
-    'Sun': 'Sol', 'Moon': 'Lua', 'Mercury': 'Mercúrio', 'Venus': 'Vênus',
-    'Mars': 'Marte', 'Jupiter': 'Júpiter', 'Saturn': 'Saturno',
-    'Uranus': 'Urano', 'Neptune': 'Netuno', 'Pluto': 'Plutão',
-    'North Node': 'Nodo Norte', 'South Node': 'Nodo Sul', 'Chiron': 'Quíron',
-    'Asc': 'Ascendente'
-}
-PLANETA_DESC = {
-    'Sun': 'O Sol representa identidade, vitalidade e a essência do seu ser. Indica onde e como você se sente mais vivo.',
-    'Moon': 'A Lua governa emoções, instintos e necessidades profundas. Revela seu mundo interior e reações intuitivas.',
-    'Mercury': 'Mercúrio simboliza a mente, a comunicação e o raciocínio. Mostra como você pensa, aprende e se expressa.',
-    'Venus': 'Vênus rege o amor, a harmonia e os valores pessoais. Fala sobre afetos, estética e aquilo que você aprecia.',
-    'Mars': 'Marte é o impulso, a ação e a coragem. Indica como você age, luta e afirma seus desejos.',
-    'Jupiter': 'Júpiter expande, traz sorte e crescimento. Fala sobre fé, otimismo e busca por significado.',
-    'Saturn': 'Saturno simboliza estrutura, responsabilidade e disciplina. Mostra desafios que levam à maturidade.',
-    'Uranus': 'Urano traz inovação, liberdade e mudanças bruscas. Impulsiona o espírito rebelde e a originalidade.',
-    'Neptune': 'Netuno dissolve limites e conecta com sonhos e espiritualidade. Representa sensibilidade, inspiração e compaixão.',
-    'Pluto': 'Plutão fala de transformação, poder e regeneração. Revela onde ocorrem crises profundas e renascimentos.',
-    'North Node': 'O Nodo Norte aponta o caminho de evolução e propósito, indicando direções a serem exploradas nesta vida.',
-    'South Node': 'O Nodo Sul mostra talentos trazidos de experiências anteriores e zonas de conforto a serem transcendidas.',
-    'Chiron': 'Quíron representa feridas profundas e o potencial de cura. Revela onde a dor se transforma em sabedoria e empatia.',
-    'Asc': 'O Ascendente descreve a máscara social, a primeira impressão e a maneira como você inicia novos ciclos.'
-}
-SIGNO_PT = {
-    'Aries': 'Áries', 'Taurus': 'Touro', 'Gemini': 'Gêmeos', 'Cancer': 'Câncer',
-    'Leo': 'Leão', 'Virgo': 'Virgem', 'Libra': 'Libra', 'Scorpio': 'Escorpião',
-    'Sagittarius': 'Sagitário', 'Capricorn': 'Capricórnio', 'Aquarius': 'Aquário', 'Pisces': 'Peixes'
-}
-SIGNO_DESC = {
-    'Aries': 'Áries é um signo de fogo cardinal...', 'Taurus': 'Touro é um signo de terra fixo...', 'Gemini': 'Gêmeos é um signo de ar mutável...', 'Cancer': 'Câncer é um signo de água cardinal...', 'Leo': 'Leão é um signo de fogo fixo...', 'Virgo': 'Virgem é um signo de terra mutável...', 'Libra': 'Libra é um signo de ar cardinal...', 'Scorpio': 'Escorpião é um signo de água fixo...', 'Sagittarius': 'Sagitário é um signo de fogo mutável...', 'Capricorn': 'Capricórnio é um signo de terra cardinal...', 'Aquarius': 'Aquário é um signo de ar fixo...', 'Pisces': 'Peixes é um signo de água mutável...'
-}
-CASA_DESC = {
-    1: 'reflete identidade...', 2: 'revela valores...', 3: 'diz respeito à comunicação...', 4: 'representa o lar...', 5: 'trata da criatividade...', 6: 'envolve trabalho...', 7: 'reflete parcerias...', 8: 'relaciona-se com a intimidade...', 9: 'diz respeito à filosofia...', 10: 'representa carreira...', 11: 'envolve amizades...', 12: 'trata do inconsciente...'
-}
-ASPECTO_NOME = {
-    'TRI': 'Trígono', 'SEX': 'Sextil', 'CON': 'Conjunção', 'SQR': 'Quadratura', 'OPP': 'Oposição'
-}
-ASPECTO_DESC = {
-    'TRI': 'Fluxo harmonioso...', 'SEX': 'Oportunidades suaves...', 'CON': 'Fusão de energias...', 'SQR': 'Tensão interna...', 'OPP': 'Polarização que pede equilíbrio...'
-}
+# --- ESTILOS DE TEXTO ---
+styles = getSampleStyleSheet()
+styles.add(ParagraphStyle(name="CapaTitulo", fontSize=32, leading=40, textColor=COR_TITULO_OURO, alignment=TA_CENTER, fontName="Helvetica-Bold"))
+styles.add(ParagraphStyle(name="CapaSubtitulo", fontSize=18, leading=22, textColor=COR_TEXTO_BRANCO, alignment=TA_CENTER, fontName="Helvetica-Oblique"))
+styles.add(ParagraphStyle(name="TituloCapitulo", fontSize=20, leading=24, textColor=COR_TITULO_OURO, alignment=TA_LEFT, spaceAfter=12, fontName="Helvetica-Bold"))
+styles.add(ParagraphStyle(name="SubtituloPlaneta", fontSize=16, leading=20, textColor=COR_SUBTITULO_AZUL, alignment=TA_LEFT, spaceBefore=10, spaceAfter=4, fontName="Helvetica-Bold"))
+styles.add(ParagraphStyle(name="CorpoTexto", fontSize=12, leading=18, textColor=COR_TEXTO_BRANCO, alignment=TA_JUSTIFY, spaceAfter=10))
+styles.add(ParagraphStyle(name="Legenda", fontSize=9, leading=12, textColor=COR_LEGENDA_CINZA, alignment=TA_LEFT, spaceAfter=12))
+styles.add(ParagraphStyle(name="Link", fontSize=12, leading=18, textColor=COR_SUBTITULO_AZUL, alignment=TA_CENTER, spaceAfter=10))
 
-# Todos os nomes de arquivo estão em minúsculas para corresponder aos seus arquivos.
-SIGNO_IMAGE = {
-    'Aries': 'aries.png',
-    'Taurus': 'touro.png',
-    'Gemini': 'gemeos.png',
-    'Cancer': 'cancer.png',
-    'Leo': 'leao.png',
-    'Virgo': 'virgem.png',
-    'Libra': 'libra.png',
-    'Scorpio': 'escorpiao.png',
-    'Sagittarius': 'sargitario.png',
-    'Capricorn': 'capricornio.png',
-    'Aquarius': 'aquario.png',
-    'Pisces': 'peixes.png'
-}
 
-class MapaPDFGenerator:
-    def __init__(self, nome, mapa, output_path):
-        self.nome = nome
-        self.mapa = mapa
-        self.output_path = output_path
-        self.story = []
-        self.styles = self._registrar_estilos()
-        self.doc = BaseDocTemplate(output_path, pagesize=A4, topMargin=2*cm, bottomMargin=2*cm, leftMargin=2*cm, rightMargin=2*cm)
-        self._configurar_templates()
+# --- FUNÇÕES AUXILIARES ---
+def background_page(canvas, doc):
+    """Desenha o fundo azul escuro em todas as páginas."""
+    canvas.saveState()
+    canvas.setFillColor(COR_FUNDO)
+    canvas.rect(0, 0, doc.width + 2 * doc.leftMargin, doc.height + 2 * doc.bottomMargin, fill=1, stroke=0)
+    canvas.restoreState()
 
-    def _registrar_estilos(self):
-        styles = getSampleStyleSheet()
-        styles.add(ParagraphStyle(name='TituloCapa', fontName='Helvetica-Bold', fontSize=30, textColor=COR_DOURADO, alignment=TA_CENTER, spaceAfter=12))
-        styles.add(ParagraphStyle(name='NomeCapa', fontName='Helvetica', fontSize=22, textColor=COR_TEXTO, alignment=TA_CENTER, spaceAfter=12))
-        styles.add(ParagraphStyle(name='SubCapa', fontName='Helvetica-Oblique', fontSize=14, textColor=COR_TEXTO, alignment=TA_CENTER, spaceAfter=50))
-        styles.add(ParagraphStyle(name='H1', fontName='Helvetica-Bold', fontSize=22, textColor=COR_DOURADO, alignment=TA_CENTER, spaceBefore=20, spaceAfter=16))
-        styles.add(ParagraphStyle(name='H2', fontName='Helvetica-Bold', fontSize=14, textColor=COR_DOURADO, alignment=TA_LEFT, spaceBefore=16, spaceAfter=8))
-        styles.add(ParagraphStyle(name='Texto', fontSize=11, textColor=COR_TEXTO, alignment=TA_JUSTIFY, leading=18))
-        styles.add(ParagraphStyle(name='AspectoBom', fontSize=11, textColor=COR_AZUL, alignment=TA_LEFT, leading=16, leftIndent=0.5*cm, spaceAfter=4))
-        styles.add(ParagraphStyle(name='AspectoTenso', fontSize=11, textColor=COR_RUBI, alignment=TA_LEFT, leading=16, leftIndent=0.5*cm, spaceAfter=4))
-        styles.add(ParagraphStyle(name='AspectoCon', fontSize=11, textColor=COR_DOURADO, alignment=TA_LEFT, leading=16, leftIndent=0.5*cm, spaceAfter=4))
-        styles.add(ParagraphStyle(name='Footer', fontSize=9, textColor=colors.grey, alignment=TA_CENTER, spaceBefore=40))
-        styles.add(ParagraphStyle(name='PageNum', fontSize=9, textColor=colors.grey, alignment=TA_RIGHT))
-        return styles
+def normalizar_nome_signo(nome_signo):
+    """Converte 'Áries' para 'aries', 'Gêmeos' para 'gemeos', etc."""
+    if nome_signo == "Sagitário":
+        return "sargitario" # Mantendo o nome do seu arquivo
+    nfkd_form = unicodedata.normalize('NFKD', nome_signo)
+    nome_sem_acentos = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
+    return nome_sem_acentos.lower()
 
-    def _fundo_cosmico(self, canvas, doc):
-        canvas.saveState()
-        canvas.setFillColor(COR_FUNDO)
-        canvas.rect(0, 0, doc.width + doc.leftMargin*2, doc.height + doc.topMargin*2, stroke=0, fill=1)
-        canvas.restoreState()
+# --- FUNÇÃO PRINCIPAL DE CRIAÇÃO DO PDF ---
+def criar_pdf(mapa: dict) -> str:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    PDF_DIR = os.path.join(BASE_DIR, "pdfs")
+    STATIC_DIR = os.path.join(BASE_DIR, "static")
+    os.makedirs(PDF_DIR, exist_ok=True)
 
-    def _cabecalho_rodape(self, canvas, doc):
-        self._fundo_cosmico(canvas, doc)
-        canvas.saveState()
-        p_nome = Paragraph(self.nome, self.styles['Footer'])
-        w, h = p_nome.wrap(doc.width, doc.bottomMargin)
-        p_nome.drawOn(canvas, doc.leftMargin, h)
-        p_num = Paragraph(f"Página {doc.page}", self.styles['PageNum'])
-        w, h = p_num.wrap(doc.width, doc.bottomMargin)
-        p_num.drawOn(canvas, doc.leftMargin, h)
-        canvas.restoreState()
+    filename = f"mapa_{mapa['nome'].replace(' ', '_')}_{int(time.time())}.pdf"
+    path_pdf = os.path.join(PDF_DIR, filename)
 
-    def _configurar_templates(self):
-        frame_capa = Frame(self.doc.leftMargin, self.doc.bottomMargin, self.doc.width, self.doc.height, id='capa')
-        frame_principal = Frame(self.doc.leftMargin, self.doc.bottomMargin, self.doc.width, self.doc.height - 0.5*cm, id='principal')
-        self.doc.addPageTemplates([
-            PageTemplate(id='Capa', frames=frame_capa, onPage=self._fundo_cosmico),
-            PageTemplate(id='Principal', frames=frame_principal, onPage=self._cabecalho_rodape)
-        ])
+    doc = SimpleDocTemplate(path_pdf, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
+    
+    story = []
+    objetos = mapa["objetos"]
 
-    def _construir_capa(self):
-        logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
-        if os.path.exists(logo_path):
-            self.story.append(Image(logo_path, width=5*cm, height=5*cm, hAlign='CENTER'))
-            self.story.append(Spacer(1, 1*cm))
-        else:
-            print(f"[WARN pdf.py] Arquivo de logo não encontrado em: {logo_path}")
+    # --- PÁGINA 1: CAPA ---
+    logo_path = os.path.join(STATIC_DIR, "logo.png")
+    if os.path.exists(logo_path):
+        story.append(Image(logo_path, width=5*cm, height=5*cm, hAlign='CENTER'))
+        story.append(Spacer(1, 1 * cm))
+    else:
+        story.append(Spacer(1, 6 * cm))
 
-        self.story.append(Paragraph("Seu Mapa Astral", self.styles['TituloCapa']))
-        self.story.append(Paragraph(self.nome, self.styles['NomeCapa']))
-        self.story.append(Paragraph("Uma Análise da Arquitetura da Sua Alma", self.styles['SubCapa']))
-        self.story.append(NextPageTemplate('Principal'))
-        self.story.append(PageBreak())
+    story.append(Paragraph("Seu Mapa Astral", styles["CapaTitulo"]))
+    story.append(Spacer(1, 1 * cm))
+    story.append(Paragraph(mapa["nome"], styles["CapaSubtitulo"]))
+    story.append(Spacer(1, 0.5 * cm))
+    story.append(Paragraph(f"{mapa['data']} | {mapa['hora']} | {mapa['cidade']}-{mapa['estado']}", styles["CapaSubtitulo"]))
+    story.append(PageBreak())
 
-    def _construir_sumario_energetico(self):
-        self.story.append(Paragraph("A Essência do Seu Mapa", self.styles['H1']))
-        self.story.append(Paragraph("Este relatório...", self.styles['Texto']))
-        # ... (código do sumário) ...
-        self.story.append(PageBreak())
+    # --- PÁGINA 2: INTRODUÇÃO ---
+    story.append(Paragraph("A Arquitetura da Sua Alma", styles["TituloCapitulo"]))
+    story.append(Paragraph(INTRO_METAFORA, styles["CorpoTexto"]))
+    story.append(Spacer(1, 0.5 * cm))
+    story.append(Paragraph(COMO_LER, styles["CorpoTexto"]))
+    story.append(PageBreak())
 
-    def _construir_tabela_posicoes(self):
-        self.story.append(Paragraph("Tabela de Posições Planetárias", self.styles['H1']))
-        # ... (código da tabela) ...
-        self.story.append(PageBreak())
+    # --- PÁGINA 3: OS PILARES (BIG 3) ---
+    story.append(Paragraph("Os Pilares da Sua Identidade", styles["TituloCapitulo"]))
+    
+    sol = objetos[const.SUN]
+    story.append(Paragraph(f"O Sol em {sol['signo_pt']}", styles["SubtituloPlaneta"]))
+    if sol['casa'] > 0: story.append(Paragraph(f"Na Casa {sol['casa']}", styles["Legenda"]))
+    story.append(Paragraph(TEXTO_SOL.get(sol['signo_pt'], "O Sol representa sua identidade, sua essência e a força vital que te impulsiona pela vida."), styles["CorpoTexto"]))
 
-    def _construir_analise_planetaria(self):
-        self.story.append(Paragraph("Análise Planetária Integrada", self.styles['H1']))
-        # ... (código da análise) ...
-        self.story.append(PageBreak())
+    lua = objetos[const.MOON]
+    story.append(Paragraph(f"A Lua em {lua['signo_pt']}", styles["SubtituloPlaneta"]))
+    if lua['casa'] > 0: story.append(Paragraph(f"Na Casa {lua['casa']}", styles["Legenda"]))
+    story.append(Paragraph(TEXTO_LUA.get(lua['signo_pt'], "A Lua governa seu mundo emocional, suas necessidades instintivas e o que te traz segurança e conforto."), styles["CorpoTexto"]))
 
-    def _construir_analise_aspectos(self):
-        # ... (código dos aspectos) ...
-        self.story.append(PageBreak())
+    asc = objetos[const.ASC]
+    story.append(Paragraph(f"O Ascendente em {asc['signo_pt']}", styles["SubtituloPlaneta"]))
+    story.append(Paragraph(TEXTO_ASC.get(asc['signo_pt'], "O Ascendente é a sua 'máscara' social, a primeira impressão que você causa e a energia que você está aprendendo a expressar no mundo."), styles["CorpoTexto"]))
+    story.append(PageBreak())
 
-    def _construir_pagina_signo(self):
-        try:
-            sun_sign_en = self.mapa.get('planetas', {}).get('Sun', {}).get('signo')
-        except Exception:
-            sun_sign_en = None
+    # --- PÁGINA 4: ASPECTOS PRINCIPAIS ---
+    story.append(Paragraph("A Trama da Sua Vida: Diálogos Internos", styles["TituloCapitulo"]))
+    story.append(Paragraph("Aspectos são as 'conversas' entre os planetas. Alguns diálogos são fluidos e fáceis (Trígonos, Sextis), outros são tensos e exigem esforço e crescimento (Quadraturas, Oposições).", styles["CorpoTexto"]))
+
+    for asp in mapa["aspectos"]:
+        key = f"{asp['p1_id']}-{asp['p2_id']}-{asp['tipo_en']}"
+        texto_explicativo = TEXTOS_ASPECTOS.get(key, TEXTOS_ASPECTOS.get(f"{asp['p2_id']}-{asp['p1_id']}-{asp['tipo_en']}", "Cada aspecto em seu mapa tece uma parte única da sua personalidade."))
         
-        if sun_sign_en and sun_sign_en in SIGNO_IMAGE:
-            signo_pt = SIGNO_PT.get(sun_sign_en, sun_sign_en)
-            img_file = SIGNO_IMAGE.get(sun_sign_en)
-            
-            img_path = os.path.join(os.path.dirname(__file__), img_file)
-            
-            self.story.append(Paragraph("O Quadro do Seu Signo Solar", self.styles['H1']))
-            # ... (código do link) ...
+        story.append(Paragraph(f"{asp['p1_nome']} em {asp['tipo_pt']} com {asp['p2_nome']}", styles["SubtituloPlaneta"]))
+        story.append(Paragraph(f"Orbe: {asp['orbe']}°", styles["Legenda"]))
+        story.append(Paragraph(texto_explicativo, styles["CorpoTexto"]))
+    story.append(PageBreak())
 
-            if os.path.exists(img_path):
-                self.story.append(Spacer(1, 0.8*cm))
-                self.story.append(Image(img_path, width=12*cm, height=12*cm, hAlign='CENTER'))
-            else:
-                print(f"[WARN pdf.py] Imagem do signo não encontrada em: {img_path}")
-            self.story.append(PageBreak())
+    # --- PÁGINA FINAL: IMAGEM E LINK ---
+    story.append(Paragraph("Seu Quadro Solar", styles["TituloCapitulo"]))
+    
+    signo_solar_nome_pt = sol['signo_pt']
+    signo_solar_norm = normalizar_nome_signo(signo_solar_nome_pt)
+    
+    imagem_path = os.path.join(STATIC_DIR, f"{signo_solar_norm}.png")
+    
+    if os.path.exists(imagem_path):
+        story.append(Image(imagem_path, width=15*cm, height=15*cm, hAlign='CENTER'))
+        story.append(Spacer(1, 1*cm))
+    
+    link_url = f"https://caveiradiadema.github.io/verba-site/{signo_solar_norm}.html"
+    texto_link = f'<a href="{link_url}" color="{COR_SUBTITULO_AZUL}"><u>Clique aqui para ver seu quadro de {signo_solar_nome_pt} em nosso site!</u></a>'
+    story.append(Paragraph(texto_link, styles["Link"]))
 
-    def _construir_conclusao(self):
-        self.story.append(Paragraph("Este mapa foi gerado...", self.styles['Footer']))
-        self.story.append(Paragraph("VERBA Astrologia", self.styles['Footer']))
+    story.append(Spacer(1, 1.5*cm))
+    story.append(Paragraph("Gerado por VERBA Astrologia ©", styles["Legenda"]))
 
-    def gerar_pdf(self):
-        print("[DEBUG pdf.py] Iniciando a criação do PDF...")
-        self._construir_capa()
-        # ... (chamadas para outras seções) ...
-        self._construir_conclusao()
-        
-        self.doc.build(self.story)
-        print(f"[DEBUG pdf.py] PDF '{self.output_path}' gerado com sucesso.")
-
-def criar_pdf(nome, mapa, output_path):
-    gerador = MapaPDFGenerator(nome, mapa, output_path)
-    gerador.gerar_pdf()
-# FORÇANDO A ATUALIZAÇÃO PARA O GIT
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Removemos o PageTemplate e usamos os argumentos onFirstPage/onLaterPages
+    # no método build() para uma aplicação mais confiável do fundo.
+    doc.build(story, onFirstPage=background_page, onLaterPages=background_page)
+    
+    print(f"[INFO pdf] Criado com sucesso: {path_pdf}")
+    return os.path.relpath(path_pdf, BASE_DIR)

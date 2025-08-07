@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mapa Astral Verba</title>
+  <link rel="icon" href="favicon.ico" />
+  <style>
+    body{
+      font-family:Arial,Helvetica,sans-serif;
+      background:#0D1B2A;
+      color:#F0EAD6;
+      padding:30px;
+      max-width:600px;
+      margin:auto
+    }
+    h1{color:#CBB26A;text-align:center;margin-bottom:30px}
+    label{display:block;margin:15px 0 5px}
+    input{
+      width:100%;padding:10px;border:none;border-radius:4px;
+      background:#F0EAD6;color:#0D1B2A;font-weight:bold
+    }
+    button{
+      margin-top:25px;padding:12px;width:100%;
+      background:#CBB26A;color:#0D1B2A;border:none;
+      font-weight:bold;font-size:16px;cursor:pointer;border-radius:4px
+    }
+    button:hover{background:#d5be80}
+    #status{
+      margin-top:30px;padding:20px;border:1px solid #CBB26A;
+      border-radius:4px;background:#1A2B3A;display:none
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Receba seu Mapa Astral</h1>
+
+  <form id="formMapa">
+    <label for="nome">Nome Completo:</label>
+    <input type="text" id="nome" required>
+
+    <label for="data">Data de Nascimento (DD/MM/AAAA ou DDMMAAAA):</label>
+    <input type="text" id="data" required placeholder="23/02/1980 ou 23021980">
+
+    <label for="hora">Hora de Nascimento (HH:MM ou HHMM):</label>
+    <input type="text" id="hora" required placeholder="09:30 ou 0930">
+
+    <label for="cidade">Cidade de Nascimento:</label>
+    <input type="text" id="cidade" required>
+
+    <label for="estado">Estado (UF):</label>
+    <input type="text" id="estado" required>
+
+    <button type="submit">Gerar Mapa Astral</button>
+  </form>
+
+  <div id="status"></div>
+
+  <script>
+    const form   = document.getElementById('formMapa');
+    const status = document.getElementById('status');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      status.style.display = 'block';
+      status.textContent   = '⏳ Processando…';
+
+      const payload = {
+        nome:   document.getElementById('nome').value,
+        data:   document.getElementById('data').value,
+        hora:   document.getElementById('hora').value,
+        cidade: document.getElementById('cidade').value,
+        estado: document.getElementById('estado').value
+      };
+
+      try {
+        const resp = await fetch('/api/mapa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!resp.ok) throw new Error('Falha no servidor');
+
+        const blob = await resp.blob();                   // recebe PDF
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url;
+        a.download = `mapa_${payload.nome.trim().replace(/\s+/g,'_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        status.textContent = '✅ PDF gerado! O download iniciou automaticamente.';
+      } catch (err) {
+        console.error(err);
+        status.textContent = '❌ Erro ao gerar o mapa. Tente novamente.';
+      }
+    });
+  </script>
+
+</body>
+</html>
