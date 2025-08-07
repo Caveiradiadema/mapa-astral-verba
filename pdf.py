@@ -6,7 +6,7 @@ from reportlab.lib import colors
 from reportlab.lib.units import cm
 import os
 
-# --- Constantes e Dicionários (sem alterações) ---
+# --- Constantes e Dicionários ---
 COR_FUNDO = colors.HexColor("#0D1B2A")
 COR_TEXTO = colors.HexColor("#F0EAD6")
 COR_DOURADO = colors.HexColor("#CBB26A")
@@ -54,8 +54,22 @@ ASPECTO_NOME = {
 ASPECTO_DESC = {
     'TRI': 'Fluxo harmonioso...', 'SEX': 'Oportunidades suaves...', 'CON': 'Fusão de energias...', 'SQR': 'Tensão interna...', 'OPP': 'Polarização que pede equilíbrio...'
 }
+
+# ===== CORREÇÃO PRINCIPAL APLICADA AQUI =====
+# Todos os nomes de arquivo estão em minúsculas para corresponder aos seus arquivos.
 SIGNO_IMAGE = {
-    'Aries': 'Aries.png', 'Taurus': 'touro.png', 'Gemini': 'gemeos.png', 'Cancer': 'cancer.png', 'Leo': 'leao.png', 'Virgo': 'virgem.png', 'Libra': 'libra.png', 'Scorpio': 'escorpiao.png', 'Sagittarius': 'sargitario.png', 'Capricorn': 'capricornio.png', 'Aquarius': 'aquario.png', 'Pisces': 'Peixes.png'
+    'Aries': 'aries.png',
+    'Taurus': 'touro.png',
+    'Gemini': 'gemeos.png',
+    'Cancer': 'cancer.png',
+    'Leo': 'leao.png',
+    'Virgo': 'virgem.png',
+    'Libra': 'libra.png',
+    'Scorpio': 'escorpiao.png',
+    'Sagittarius': 'sargitario.png',
+    'Capricorn': 'capricornio.png',
+    'Aquarius': 'aquario.png',
+    'Pisces': 'peixes.png'
 }
 
 class MapaPDFGenerator:
@@ -109,13 +123,12 @@ class MapaPDFGenerator:
         ])
 
     def _construir_capa(self):
-        # ===== CÓDIGO MAIS ROBUSTO AQUI =====
+        # Caminho para a logo, que está na mesma pasta que este script
         logo_path = os.path.join(os.path.dirname(__file__), "logo.png")
         if os.path.exists(logo_path):
             self.story.append(Image(logo_path, width=5*cm, height=5*cm, hAlign='CENTER'))
             self.story.append(Spacer(1, 1*cm))
         else:
-            # Se a logo não for encontrada, o programa não vai quebrar.
             print(f"[WARN pdf.py] Arquivo de logo não encontrado em: {logo_path}")
 
         self.story.append(Paragraph("Seu Mapa Astral", self.styles['TituloCapa']))
@@ -167,7 +180,6 @@ class MapaPDFGenerator:
             signo_pt = SIGNO_PT.get(sun_sign_en, sun_sign_en)
             img_file = SIGNO_IMAGE.get(sun_sign_en)
             
-            # ===== CÓDIGO MAIS ROBUSTO AQUI =====
             img_path = os.path.join(os.path.dirname(__file__), img_file)
             
             self.story.append(Paragraph("O Quadro do Seu Signo Solar", self.styles['H1']))
@@ -177,7 +189,6 @@ class MapaPDFGenerator:
                 self.story.append(Spacer(1, 0.8*cm))
                 self.story.append(Image(img_path, width=12*cm, height=12*cm, hAlign='CENTER'))
             else:
-                # Se a imagem do signo não for encontrada, o programa não vai quebrar.
                 print(f"[WARN pdf.py] Imagem do signo não encontrada em: {img_path}")
             self.story.append(PageBreak())
 
