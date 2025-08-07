@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Mapa Astral Grátis | Descubra seu Signo e Casas - VERBA</title>
 
   <!-- Google Ads -->
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6341691198145403"
-     crossorigin="anonymous"></script>
+    crossorigin="anonymous"></script>
 
   <!-- SEO -->
   <meta name="description" content="Gere seu Mapa Astral completo grátis. Descubra seu signo solar, ascendente, casas e aspectos astrológicos com interpretação visual.">
@@ -120,19 +120,19 @@
   <!-- Google Ad -->
   <div style="max-width: 600px; margin: 10px auto;">
     <ins class="adsbygoogle"
-         style="display:block"
-         data-ad-client="ca-pub-6341691198145403"
-         data-ad-slot="7913516518"
-         data-ad-format="auto"
-         data-full-width-responsive="true"></ins>
+      style="display:block"
+      data-ad-client="ca-pub-6341691198145403"
+      data-ad-slot="7913516518"
+      data-ad-format="auto"
+      data-full-width-responsive="true"></ins>
     <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
   </div>
 
   <div class="container">
-    <form action="/api/mapa" method="post" onsubmit="setTimeout(() => { window.location.href='https://caveiradiadema.github.io/verba-site/'; }, 4000);">
+    <form id="formMapa">
       <label>Nome:<br><input type="text" name="nome" required placeholder="Seu nome completo"></label>
-      <label>Data de nascimento (ex: 23021980 ou 23/02/1980):<br><input type="text" name="data_nasc" required placeholder="DDMMAAAA ou DD/MM/AAAA"></label>
-      <label>Hora de nascimento (ex: 0930 ou 09:30):<br><input type="text" name="hora_nasc" required placeholder="HHMM ou HH:MM"></label>
+      <label>Data de nascimento:<br><input type="text" name="data_nasc" required placeholder="DDMMAAAA ou DD/MM/AAAA"></label>
+      <label>Hora de nascimento:<br><input type="text" name="hora_nasc" required placeholder="HHMM ou HH:MM"></label>
       <label>Cidade:<br><input type="text" name="cidade" required placeholder="Sua cidade de nascimento"></label>
       <label>Estado (sigla):<br><input type="text" name="estado" required placeholder="UF"></label>
       <button type="submit">Gerar Mapa Astral</button>
@@ -140,11 +140,55 @@
   </div>
 
   <footer>
-  &copy; 2025 VERBA Astrologia – Todos os direitos reservados. <br>
-  <a href="https://caveiradiadema.github.io/verba-site/" style="color:#CBB26A; text-decoration:underline;">
-    Confira também nossos quadros astrológicos
-  </a>
-</footer>
+    &copy; 2025 VERBA Astrologia – Todos os direitos reservados. <br>
+    <a href="https://caveiradiadema.github.io/verba-site/" style="color:#CBB26A; text-decoration:underline;">
+      Confira também nossos quadros astrológicos
+    </a>
+  </footer>
 
+  <script>
+    document.getElementById('formMapa').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const form = e.target;
+      const dados = {
+        nome: form.nome.value,
+        data: form.data_nasc.value,
+        hora: form.hora_nasc.value,
+        cidade: form.cidade.value,
+        estado: form.estado.value
+      };
+
+      try {
+        const resposta = await fetch('/api/mapa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dados)
+        });
+
+        if (!resposta.ok) {
+          alert('Erro ao gerar o mapa. Verifique os dados ou tente novamente.');
+          return;
+        }
+
+        const blob = await resposta.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mapa_${dados.nome.replace(/\s+/g, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        // Redireciona após 4 segundos
+        setTimeout(() => {
+          window.location.href = 'https://caveiradiadema.github.io/verba-site/';
+        }, 4000);
+      } catch (error) {
+        console.error('Erro ao enviar os dados:', error);
+        alert('Ocorreu um erro inesperado. Tente novamente mais tarde.');
+      }
+    });
+  </script>
 </body>
 </html>
