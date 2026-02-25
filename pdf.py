@@ -48,7 +48,7 @@ def background_page(canvas, doc):
 def normalizar_nome_signo(nome_signo):
     """Converte 'Áries' para 'aries', 'Gêmeos' para 'gemeos', etc."""
     if nome_signo == "Sagitário":
-        return "sargitario" # Mantendo o nome do seu arquivo
+        return "sargitario" # Mantendo a compatibilidade com seus assets
     nfkd_form = unicodedata.normalize('NFKD', nome_signo)
     nome_sem_acentos = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
     return nome_sem_acentos.lower()
@@ -121,7 +121,7 @@ def criar_pdf(mapa: dict) -> str:
         story.append(Paragraph(texto_explicativo, styles["CorpoTexto"]))
     story.append(PageBreak())
 
-    # --- PÁGINA FINAL: IMAGEM E LINK ---
+    # --- PÁGINA FINAL: IMAGEM E LINK PARA O SITE NOVO ---
     story.append(Paragraph("Seu Quadro Solar", styles["TituloCapitulo"]))
     
     signo_solar_nome_pt = sol['signo_pt']
@@ -133,16 +133,15 @@ def criar_pdf(mapa: dict) -> str:
         story.append(Image(imagem_path, width=15*cm, height=15*cm, hAlign='CENTER'))
         story.append(Spacer(1, 1*cm))
     
-    link_url = f"https://caveiradiadema.github.io/verba-site/{signo_solar_norm}.html"
+    # URL atualizada para o site na Vercel
+    link_url = f"https://verbaart.vercel.app/signos/{signo_solar_norm}"
     texto_link = f'<a href="{link_url}" color="{COR_SUBTITULO_AZUL}"><u>Clique aqui para ver seu quadro de {signo_solar_nome_pt} em nosso site!</u></a>'
     story.append(Paragraph(texto_link, styles["Link"]))
 
     story.append(Spacer(1, 1.5*cm))
-    story.append(Paragraph("Gerado por VERBA Astrologia ©", styles["Legenda"]))
+    story.append(Paragraph("Gerado por VERBA ART ©", styles["Legenda"]))
 
-    # --- CORREÇÃO APLICADA AQUI ---
-    # Removemos o PageTemplate e usamos os argumentos onFirstPage/onLaterPages
-    # no método build() para uma aplicação mais confiável do fundo.
+    # Finalização do PDF com o fundo colorido
     doc.build(story, onFirstPage=background_page, onLaterPages=background_page)
     
     print(f"[INFO pdf] Criado com sucesso: {path_pdf}")
