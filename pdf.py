@@ -42,13 +42,12 @@ def background_page(canvas, doc):
     """Desenha o fundo azul escuro em todas as páginas."""
     canvas.saveState()
     canvas.setFillColor(COR_FUNDO)
-    canvas.rect(0, 0, doc.width + 2 * doc.leftMargin, doc.height + 2 * doc.bottomMargin, fill=1, stroke=0)
+    canvas.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
     canvas.restoreState()
 
 def normalizar_nome_signo(nome_signo):
-    """Converte 'Áries' para 'aries', 'Gêmeos' para 'gemeos', etc."""
-    if nome_signo == "Sagitário":
-        return "sargitario" # Mantendo a compatibilidade com seus assets
+    """Converte 'Áries' para 'aries', 'Sagitário' para 'sagitario', etc."""
+    # LIMPEZA B22: Removida a exceção do 'sargitario'. Agora usamos o nome correto.
     nfkd_form = unicodedata.normalize('NFKD', nome_signo)
     nome_sem_acentos = "".join([c for c in nfkd_form if not unicodedata.combining(c)])
     return nome_sem_acentos.lower()
@@ -96,33 +95,32 @@ def criar_pdf(mapa: dict) -> str:
     sol = objetos[const.SUN]
     story.append(Paragraph(f"O Sol em {sol['signo_pt']}", styles["SubtituloPlaneta"]))
     if sol['casa'] > 0: story.append(Paragraph(f"Na Casa {sol['casa']}", styles["Legenda"]))
-    story.append(Paragraph(TEXTO_SOL.get(sol['signo_pt'], "O Sol representa sua identidade, sua essência e a força vital que te impulsiona pela vida."), styles["CorpoTexto"]))
+    story.append(Paragraph(TEXTO_SOL.get(sol['signo_pt'], "Sua essência solar."), styles["CorpoTexto"]))
 
     lua = objetos[const.MOON]
     story.append(Paragraph(f"A Lua em {lua['signo_pt']}", styles["SubtituloPlaneta"]))
     if lua['casa'] > 0: story.append(Paragraph(f"Na Casa {lua['casa']}", styles["Legenda"]))
-    story.append(Paragraph(TEXTO_LUA.get(lua['signo_pt'], "A Lua governa seu mundo emocional, suas necessidades instintivas e o que te traz segurança e conforto."), styles["CorpoTexto"]))
+    story.append(Paragraph(TEXTO_LUA.get(lua['signo_pt'], "Suas emoções profundas."), styles["CorpoTexto"]))
 
     asc = objetos[const.ASC]
     story.append(Paragraph(f"O Ascendente em {asc['signo_pt']}", styles["SubtituloPlaneta"]))
-    story.append(Paragraph(TEXTO_ASC.get(asc['signo_pt'], "O Ascendente é a sua 'máscara' social, a primeira impressão que você causa e a energia que você está aprendendo a expressar no mundo."), styles["CorpoTexto"]))
+    story.append(Paragraph(TEXTO_ASC.get(asc['signo_pt'], "Sua forma de se mostrar ao mundo."), styles["CorpoTexto"]))
     story.append(PageBreak())
 
     # --- PÁGINA 4: ASPECTOS PRINCIPAIS ---
     story.append(Paragraph("A Trama da Sua Vida: Diálogos Internos", styles["TituloCapitulo"]))
-    story.append(Paragraph("Aspectos são as 'conversas' entre os planetas. Alguns diálogos são fluidos e fáceis (Trígonos, Sextis), outros são tensos e exigem esforço e crescimento (Quadraturas, Oposições).", styles["CorpoTexto"]))
-
+    
     for asp in mapa["aspectos"]:
         key = f"{asp['p1_id']}-{asp['p2_id']}-{asp['tipo_en']}"
-        texto_explicativo = TEXTOS_ASPECTOS.get(key, TEXTOS_ASPECTOS.get(f"{asp['p2_id']}-{asp['p1_id']}-{asp['tipo_en']}", "Cada aspecto em seu mapa tece uma parte única da sua personalidade."))
+        texto_explicativo = TEXTOS_ASPECTOS.get(key, TEXTOS_ASPECTOS.get(f"{asp['p2_id']}-{asp['p1_id']}-{asp['tipo_en']}", "Interação planetária única."))
         
         story.append(Paragraph(f"{asp['p1_nome']} em {asp['tipo_pt']} com {asp['p2_nome']}", styles["SubtituloPlaneta"]))
         story.append(Paragraph(f"Orbe: {asp['orbe']}°", styles["Legenda"]))
         story.append(Paragraph(texto_explicativo, styles["CorpoTexto"]))
     story.append(PageBreak())
 
-    # --- PÁGINA FINAL: IMAGEM E LINK PARA O SITE NOVO ---
-    story.append(Paragraph("Seu Quadro Solar", styles["TituloCapitulo"]))
+    # --- PÁGINA FINAL: VENDA (DNA LUTINA) ---
+    story.append(Paragraph("Seu Quadro Solar Personalizado", styles["TituloCapitulo"]))
     
     signo_solar_nome_pt = sol['signo_pt']
     signo_solar_norm = normalizar_nome_signo(signo_solar_nome_pt)
@@ -131,18 +129,20 @@ def criar_pdf(mapa: dict) -> str:
     
     if os.path.exists(imagem_path):
         story.append(Image(imagem_path, width=15*cm, height=15*cm, hAlign='CENTER'))
-        story.append(Spacer(1, 1*cm))
+        story.append(Spacer(1, 0.5*cm))
     
-    # URL atualizada para o site na Vercel
+    # URL FINAL: Fricção Zero para a Vercel
     link_url = f"https://verbaart.vercel.app/signos/{signo_solar_norm}"
-    texto_link = f'<a href="{link_url}" color="{COR_SUBTITULO_AZUL}"><u>Clique aqui para ver seu quadro de {signo_solar_nome_pt} em nosso site!</u></a>'
+    
+    story.append(Paragraph(f"Sua energia de {signo_solar_nome_pt} merece ser eternizada em sua parede.", styles["CorpoTexto"]))
+    
+    texto_link = f'<a href="{link_url}" color="{COR_SUBTITULO_AZUL}"><u>CLIQUE AQUI PARA ADQUIRIR SUA OBRA DE ART EM NOSSA GALERIA</u></a>'
+    story.append(Spacer(1, 0.5*cm))
     story.append(Paragraph(texto_link, styles["Link"]))
 
     story.append(Spacer(1, 1.5*cm))
-    story.append(Paragraph("Gerado por VERBA ART ©", styles["Legenda"]))
+    story.append(Paragraph("VERBA ART © | A Arte do Seu Destino", styles["Legenda"]))
 
-    # Finalização do PDF com o fundo colorido
+    # Build
     doc.build(story, onFirstPage=background_page, onLaterPages=background_page)
-    
-    print(f"[INFO pdf] Criado com sucesso: {path_pdf}")
     return os.path.relpath(path_pdf, BASE_DIR)
